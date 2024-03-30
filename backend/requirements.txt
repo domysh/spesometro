@@ -1,0 +1,10 @@
+fastapi[all]
+httpx
+uvicorn[standard]
+passlib[bcrypt]
+psutil
+python-jose[cryptography]
+fastapi-socketio
+beanie
+motor
+aiocache

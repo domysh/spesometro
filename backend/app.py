@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import uvicorn, utils
 import os, asyncio, functools
 from fastapi import FastAPI, HTTPException, Depends, APIRouter

@@ -8,3 +8,6 @@ fastapi-socketio
 beanie
 motor
 aiocache
+python-dotenv
+
+

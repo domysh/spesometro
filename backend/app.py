@@ -7,6 +7,7 @@ from jose import jwt
 from bson import ObjectId
 from models import *
 import uuid, time
+from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi_socketio import SocketManager
 from utils import crypto, socketio_emit
@@ -319,6 +320,14 @@ if not DEBUG:
             return FileResponse("frontend/index.html", media_type='text/html')
         else:
             return FileResponse(file_request)
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.realpath(__file__)))

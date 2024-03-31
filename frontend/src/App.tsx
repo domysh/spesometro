@@ -59,7 +59,6 @@ export default function App() {
             breakpoint: 'sm',
             collapsed: { desktop: true, mobile: true },
           }}
-          padding="md"
         >
           <AppShell.Header>
             <Box style={{
@@ -80,14 +79,12 @@ export default function App() {
           <AppShell.Main>
           <Container>
               <BrowserRouter>
-                
                   <Routes>
                     <Route path="/" element={<Dashboard setHeader={setHeader} />} />
                     <Route path="/board/:board_id" element={<BoardPage setHeader={setHeader} />}/>
                     <Route path="/board/:board_id/:screen" element={<BoardPage setHeader={setHeader} />} />
                     <Route path="*" element={<Title order={1}>404 Not Found</Title>} />
                   </Routes>
-                
               </BrowserRouter>
             </Container>
           </AppShell.Main>

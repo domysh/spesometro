@@ -47,7 +47,7 @@ export const CategorySettingsModal = ({ open, onClose, board }: { open:boolean, 
             <TextInput
                 value={edits[cat.id]?.name??cat.name}
                 onChange={(e) => setEdits(draft => {
-                    draft[cat.id] = {name: e.currentTarget.value}
+                    draft[cat.id] = {name: e.currentTarget?.value??""}
                     clearDrafts(draft)
                 })}
                 required

@@ -17,6 +17,7 @@ from utils import crypto, socketio_emit
 from env import DEBUG, JWT_ALGORITHM, APP_SECRET, JWT_EXPIRE_H
 from db import Role, init_db, shutdown_db, User, first_run, Board
 from fastapi.responses import FileResponse
+from filelock import FileLock
 
 async def front_refresh(additional:list[str]=None):
     await socketio_emit([] if additional is None else additional)
@@ -32,27 +33,34 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 app = FastAPI(debug=DEBUG, redoc_url=None, lifespan=lifespan)
 utils.socketio = SocketManager(app, "/sock", socketio_path="")
 
-app.locker = {}
-app.locker_lock = asyncio.Lock()
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
+if not os.path.exists("locks"): os.mkdir("locks")
+
+locker_lock = FileLock("locks/locker.lock")
+locker = {}
 
 @utils.socketio.on("update")
 async def updater(): pass
 
-async def id_locker(id: ObjectId):
-    await app.locker_lock.acquire()
+def id_locker(id: ObjectId):
+    locker_lock.acquire()
+    """
     if ObjectId(id) in app.locker:
         app.locker_lock.release()
-        await app.locker[id].acquire()
+        app.locker[id].acquire()
     else:
-        app.locker[id] = asyncio.Lock()
-        await app.locker[id].acquire()
+        app.locker[id] = FileLock("locks/locker_"+id.binary.hex().lower()+".lock")
+        app.locker[id].acquire()
         app.locker_lock.release()
+    """
 
-async def id_locker_release(id: ObjectId):
-    await app.locker_lock.acquire()
+def id_locker_release(id: ObjectId):
+    """
+    app.locker_lock.acquire()
     if ObjectId(id) in app.locker:
         app.locker[id].release()
-    app.locker_lock.release()
+    """
+    locker_lock.release()
 
 async def create_access_token(data: dict):
     to_encode = data.copy()
@@ -138,10 +146,13 @@ async def get_board(id: str):
 async def edit_board(id: str, form: AddBoardForm):
     """ Edit board """
     locker_id = ObjectId(id)
-    await id_locker(locker_id)       
-    board = await Board.find_one(Board.id == ObjectId(id))
-    await board.set(form)
-    await id_locker_release(locker_id)
+    id_locker(locker_id)
+    try:    
+        board = await Board.find_one(Board.id == ObjectId(id))
+        await board.set(form)
+        await board.sync()
+    finally:
+        id_locker_release(locker_id)
     await front_refresh()
     return { "id": id }
 
@@ -164,15 +175,18 @@ async def new_board_categories(id: str, form: AddCategory):
 async def edit_board_categories(id: str, category_id: str, form: AddCategory):
     """ Edit a board category """
     locker_id = ObjectId(id)
-    await id_locker(locker_id)
-    board = await Board.find_one(Board.id == ObjectId(id))
-    category_id = uuid.UUID(category_id)
-    for ele in board.categories:
-        if ele.id == category_id:
-            for k, v in form.model_dump().items(): setattr(ele, k, v)
-            break
-    await board.save()
-    await id_locker_release(locker_id)
+    id_locker(locker_id)
+    try:
+        board = await Board.find_one(Board.id == ObjectId(id))
+        category_id = uuid.UUID(category_id)
+        for ele in board.categories:
+            if ele.id == category_id:
+                for k, v in form.model_dump().items(): setattr(ele, k, v)
+                break
+        await board.save()
+        await board.sync()
+    finally:
+        id_locker_release(locker_id)
     await front_refresh()
     return {"id":str(category_id)}
 
@@ -209,15 +223,18 @@ async def new_board_members(id: str, form: AddMember):
 async def edit_board_members(id: str, member_id: str, form: AddMember):
     """ Edit a board member """
     locker_id = ObjectId(id)
-    await id_locker(locker_id) 
-    board = await Board.find_one(Board.id == ObjectId(id))
-    member_id = uuid.UUID(member_id)
-    for ele in board.members:
-        if ele.id == member_id:
-            for k, v in form.model_dump().items(): setattr(ele, k, v)
-            break
-    await board.save()
-    await id_locker_release(locker_id)
+    id_locker(locker_id)
+    try:
+        board = await Board.find_one(Board.id == ObjectId(id))
+        member_id = uuid.UUID(member_id)
+        for ele in board.members:
+            if ele.id == member_id:
+                for k, v in form.model_dump().items(): setattr(ele, k, v)
+                break
+        await board.save()
+        await board.sync()
+    finally:
+        id_locker_release(locker_id)
     await front_refresh()
     return {"id":str(member_id)}
 
@@ -251,15 +268,18 @@ async def new_board_products(id: str, form: AddProduct):
 async def edit_board_products(id: str, product_id: str, form: AddProduct):
     """ Edit a board product """
     locker_id = ObjectId(id)
-    await id_locker(locker_id) 
-    board = await Board.find_one(Board.id == ObjectId(id))
-    product_id = uuid.UUID(product_id)
-    for ele in board.products:
-        if ele.id == product_id:
-            for k, v in form.model_dump().items(): setattr(ele, k, v)
-            break
-    await board.save()
-    await id_locker_release(locker_id)
+    id_locker(locker_id)
+    try:
+        board = await Board.find_one(Board.id == ObjectId(id))
+        product_id = uuid.UUID(product_id)
+        for ele in board.products:
+            if ele.id == product_id:
+                for k, v in form.model_dump().items(): setattr(ele, k, v)
+                break
+        await board.save()
+        await board.sync()
+    finally:
+        id_locker_release(locker_id)
     await front_refresh()
     return {"id":str(product_id)}
 
@@ -306,18 +326,21 @@ async def new_user(form: AddUser):
 async def edit_user(id: str, form: AddUser):
     """ Edit a user """
     locker_id = ObjectId(id)
-    await id_locker(locker_id) 
-    form.username = form.username.lower()
-    if form.username == "admin":
-        raise HTTPException(
-            status_code=400,
-            detail="'admin' is reserved"
-        )
-    if form.password:
-        form.password = crypto.hash(form.password)
-    user = await User.find_one(User.id == ObjectId(id))
-    await user.set(form)
-    await id_locker_release(locker_id)
+    id_locker(locker_id)
+    try:
+        form.username = form.username.lower()
+        if form.username == "admin":
+            raise HTTPException(
+                status_code=400,
+                detail="'admin' is reserved"
+            )
+        if form.password:
+            form.password = crypto.hash(form.password)
+        user = await User.find_one(User.id == ObjectId(id))
+        await user.set(form)
+        await user.sync()
+    finally:
+        id_locker_release(locker_id)
     await front_refresh()
     return {"id":id}
 
@@ -357,7 +380,6 @@ else:
     )
 
 if __name__ == '__main__':
-    os.chdir(os.path.dirname(os.path.realpath(__file__)))
     asyncio.run(first_run())
     uvicorn.run(
         "app:app",

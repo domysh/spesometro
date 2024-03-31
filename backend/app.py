@@ -82,7 +82,7 @@ async def login_api(form: OAuth2PasswordRequestForm = Depends()):
     if form.password == "" or form.username == "":
         raise HTTPException(400,"Cannot insert an empty value!")
     await asyncio.sleep(0.3) # No bruteforce :)
-    user = await User.find_one(User.username == form.username )
+    user = await User.find_one(User.username == form.username.lower() )
     if not user:
         raise HTTPException(406,"User not found!")
     if not crypto.verify(form.password, user.password):

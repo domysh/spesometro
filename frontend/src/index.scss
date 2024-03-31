@@ -30,8 +30,6 @@ html, body, #root{
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 100vw;
   min-height: 100vh;
 }
@@ -40,6 +38,15 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+.transparency-on-hover:hover{
+  transition: opacity 0.2s ease;
+  opacity: 0.8;
+}
+
+.transparency-on-hover{
+  transition: opacity 0.2s ease;
 }
 
 .center-flex-col{

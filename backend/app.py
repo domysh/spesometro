@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import uvicorn, utils
-import os, asyncio, functools
+import os, asyncio
 from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from contextlib import asynccontextmanager
@@ -18,24 +18,13 @@ from env import DEBUG, JWT_ALGORITHM, APP_SECRET, JWT_EXPIRE_H
 from db import Role, init_db, shutdown_db, User, first_run, Board
 from fastapi.responses import FileResponse
 
-def front_refresh(additional:list[str]=None):
-    def wrapper(func):
-        @functools.wraps(func)
-        async def wrapped(*args):
-             # Some fancy foo stuff
-            res = await func(*args)
-            await raw_refresh_frontend(additional)
-            return res
-        return wrapped
-    return wrapper
-
-async def raw_refresh_frontend(additional:list[str]=None):
-    await socketio_emit(["all"] if additional is None else additional)
+async def front_refresh(additional:list[str]=None):
+    await socketio_emit([] if additional is None else additional)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    await raw_refresh_frontend()
+    await front_refresh()
     yield
     await shutdown_db()
 
@@ -106,18 +95,18 @@ async def get_boards():
     """ Get created boards list and related data """
     return await Board.find_all().to_list()
 
-@front_refresh()
 @editor_api.put("/boards", response_model=IdResponse, tags=["board"])
 async def new_board(form: AddBoardForm):
     """ Create a new board """
     board:Board = await Board(**form.model_dump(), categories=[], members=[], products=[]).save()
+    await front_refresh()
     return { "id": board.id.binary.hex() }
 
-@front_refresh()
 @editor_api.delete("/boards/{id}", response_model=IdResponse, tags=["board"])
 async def remove_board(id: str):
     """ Create a new board """
     await Board.find_one(Board.id == ObjectId(id)).delete_one()
+    await front_refresh()
     return { "id": id }
 
 @guest_api.get("/boards/{id}", response_model=BoardDTO, tags=["board"])
@@ -125,12 +114,12 @@ async def get_board(id: str):
     """ Get board """
     return await Board.find_one(Board.id == ObjectId(id))
 
-@front_refresh()
 @editor_api.post("/boards/{id}", response_model=IdResponse, tags=["board"])
 async def edit_board(id: str, form: AddBoardForm):
     """ Get board """
     board = await Board.find_one(Board.id == ObjectId(id))
     await board.set(form)
+    await front_refresh()
     return { "id": id }
 
 @guest_api.get("/boards/{id}/categories", response_model=list[Category], tags=["category"])
@@ -138,7 +127,6 @@ async def get_board_categories(id: str):
     """ Get board category list """
     return (await Board.find_one(Board.id == ObjectId(id))).categories
 
-@front_refresh()
 @editor_api.put("/boards/{id}/categories", response_model=IdResponse, tags=["category"])
 async def new_board_categories(id: str, form: AddCategory):
     """ Add a new board category """
@@ -146,9 +134,9 @@ async def new_board_categories(id: str, form: AddCategory):
     new_id = uuid.uuid4()
     board.categories.append(Category(**form.model_dump(), id=new_id))
     await board.save()
+    await front_refresh()
     return {"id":str(new_id)}
 
-@front_refresh()
 @editor_api.post("/boards/{id}/categories/{category_id}", response_model=IdResponse, tags=["category"])
 async def edit_board_categories(id: str, category_id: str, form: AddCategory):
     """ Edit a board category """
@@ -159,9 +147,9 @@ async def edit_board_categories(id: str, category_id: str, form: AddCategory):
             for k, v in form.model_dump().items(): setattr(ele, k, v)
             break
     await board.save()
+    await front_refresh()
     return {"id":str(category_id)}
 
-@front_refresh()
 @editor_api.delete("/boards/{id}/categories/{category_id}", response_model=IdResponse, tags=["category"])
 async def delete_board_categories(id: str, category_id: str):
     """ Delete a board category """
@@ -173,6 +161,7 @@ async def delete_board_categories(id: str, category_id: str):
     for memb in board.members:
         memb.categories = [ele for ele in memb.categories if ele != category_id]
     await board.save()
+    await front_refresh()
     return {"id":str(category_id)}
     
 @guest_api.get("/board/{id}/members", response_model=list[Member], tags=["member"])
@@ -180,7 +169,6 @@ async def get_board_members(id: str):
     """ Get board member list """
     return (await Board.find_one(Board.id == ObjectId(id))).members
 
-@front_refresh()
 @editor_api.put("/boards/{id}/members", response_model=IdResponse, tags=["member"])
 async def new_board_members(id: str, form: AddMember):
     """ Add a new board member """
@@ -188,9 +176,9 @@ async def new_board_members(id: str, form: AddMember):
     new_id = uuid.uuid4()
     board.members.append(Member(**form.model_dump(), id=new_id))
     await board.save()
+    await front_refresh()
     return {"id":str(new_id)}
 
-@front_refresh()
 @editor_api.post("/boards/{id}/members/{member_id}", response_model=IdResponse, tags=["member"])
 async def edit_board_members(id: str, member_id: str, form: AddMember):
     """ Edit a board member """
@@ -201,9 +189,9 @@ async def edit_board_members(id: str, member_id: str, form: AddMember):
             for k, v in form.model_dump().items(): setattr(ele, k, v)
             break
     await board.save()
+    await front_refresh()
     return {"id":str(member_id)}
 
-@front_refresh()
 @editor_api.delete("/boards/{id}/members/{member_id}", response_model=IdResponse, tags=["member"])
 async def delete_board_members(id: str, member_id: str):
     """ Delete a board category """
@@ -211,6 +199,7 @@ async def delete_board_members(id: str, member_id: str):
     member_id = uuid.UUID(member_id)
     board.members = [ele for ele in board.members if ele.id != member_id]
     await board.save()
+    await front_refresh()
     return {"id":str(member_id)}
     
 
@@ -219,7 +208,6 @@ async def get_board_products(id: str):
     """ Get board product list """
     return (await Board.find_one(Board.id == ObjectId(id))).products
 
-@front_refresh()
 @editor_api.put("/boards/{id}/products", response_model=IdResponse, tags=["product"])
 async def new_board_products(id: str, form: AddProduct):
     """ Add a new board product """
@@ -227,9 +215,9 @@ async def new_board_products(id: str, form: AddProduct):
     new_id = uuid.uuid4()
     board.products.append(Product(**form.model_dump(), id=new_id))
     await board.save()
+    await front_refresh()
     return {"id":str(new_id)}
 
-@front_refresh()
 @editor_api.post("/boards/{id}/products/{product_id}", response_model=IdResponse, tags=["product"])
 async def edit_board_products(id: str, product_id: str, form: AddProduct):
     """ Edit a board product """
@@ -240,9 +228,9 @@ async def edit_board_products(id: str, product_id: str, form: AddProduct):
             for k, v in form.model_dump().items(): setattr(ele, k, v)
             break
     await board.save()
+    await front_refresh()
     return {"id":str(product_id)}
 
-@front_refresh()
 @editor_api.delete("/boards/{id}/products/{product_id}", response_model=IdResponse, tags=["product"])
 async def delete_board_products(id: str, product_id: str):
     """ Delete a board product """
@@ -250,6 +238,7 @@ async def delete_board_products(id: str, product_id: str):
     product_id = uuid.UUID(product_id)
     board.products = [ele for ele in board.products if ele.id != product_id]
     await board.save()
+    await front_refresh()
     return {"id":str(product_id)}
 
 @admin_api.get("/users", response_model=list[UserDTO], tags=["user"])
@@ -262,7 +251,6 @@ async def get_user(id: str):
     """ Get user """
     return await User.find_one(User.id == ObjectId(id))
 
-@front_refresh()
 @admin_api.put("/users", response_model=IdResponse, tags=["user"])
 async def new_user(form: AddUser):
     """ Add a new user """
@@ -279,9 +267,9 @@ async def new_user(form: AddUser):
         )
     form.password=crypto.hash(form.password)
     user:User = await User(**form.model_dump()).save()
+    await front_refresh()
     return {"id": user.id.binary.hex()}
 
-@front_refresh()
 @admin_api.post("/users/{id}", response_model=IdResponse, tags=["user"])
 async def edit_user(id: str, form: AddUser):
     """ Edit a user """
@@ -295,9 +283,9 @@ async def edit_user(id: str, form: AddUser):
         form.password = crypto.hash(form.password)
     user = await User.find_one(User.id == ObjectId(id))
     await user.set(form)
+    await front_refresh()
     return {"id":id}
 
-@front_refresh()
 @admin_api.delete("/users/{id}", response_model=IdResponse, tags=["user"])
 async def delete_users(id: str):
     """ Delete a user """
@@ -308,6 +296,7 @@ async def delete_users(id: str):
             detail="'admin' is reserved"
         )
     await User.find_one(User.id == ObjectId(id)).delete_one()
+    await front_refresh()
     return {"id":id}
 
 app.include_router(api)

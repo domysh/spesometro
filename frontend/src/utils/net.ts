@@ -2,6 +2,17 @@
 
 export const DEV_IP_BACKEND = "127.0.0.1:8080"
 
+export const getAuthHeaders = ():({[k:string]:string}) => {
+    const token = JSON.parse(localStorage.getItem("login-token")??"null")
+    if (!token){
+        return {}
+    }
+    return {
+        "Authorization": "Bearer "+token??""
+    }
+
+}
+
 export const getLink = (url:string, params?: {[p:string]:any}): string => {
     url = url.trim()
     if (url.charAt(0) != '/'){
@@ -34,9 +45,7 @@ export const getRequest = async (url:string, options: {params?: {[p:string]:any}
         method: "GET",
         credentials: "same-origin",
         cache: 'no-cache',
-        headers:{
-            "Authorization": "Bearer "+localStorage.getItem("login-token")??""
-        }
+        headers: {...getAuthHeaders()}
     }).then(elaborateJsonRequest)
 }
 
@@ -48,7 +57,7 @@ export const postRequest = async (url:string, options: {params?: {[p:string]:any
         body: options.body?JSON.stringify(options.body):undefined,
         headers:{
             "Content-Type": "application/json",
-            "Authorization": "Bearer "+localStorage.getItem("login-token")??"",
+            ...getAuthHeaders()
         }
     }).then(elaborateJsonRequest)
 }
@@ -61,7 +70,7 @@ export const postFormRequest = async (url:string, options: {params?: {[p:string]
         body: options.body?new URLSearchParams(options.body).toString():undefined,
         headers:{
             "Content-Type": "application/x-www-form-urlencoded",
-            "Authorization": "Bearer "+localStorage.getItem("login-token")??"",
+            ...getAuthHeaders()
         }
     }).then(elaborateJsonRequest)
 }
@@ -74,7 +83,7 @@ export const putRequest = async (url:string, options: {params?: {[p:string]:any}
         body: options.body?JSON.stringify(options.body):undefined,
         headers:{
             "Content-Type": "application/json",
-            "Authorization": "Bearer "+localStorage.getItem("login-token")??"",
+            ...getAuthHeaders()
         }
     }).then(elaborateJsonRequest)
 }
@@ -84,8 +93,6 @@ export const deleteRequest = async (url:string, options: {params?: {[p:string]:a
         method: "DELETE",
         credentials: "same-origin",
         cache: 'no-cache',
-        headers:{
-            "Authorization": "Bearer "+localStorage.getItem("login-token")??"",
-        }
+        headers:{...getAuthHeaders()}
     }).then(elaborateJsonRequest)
 }

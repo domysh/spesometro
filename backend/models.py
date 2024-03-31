@@ -16,11 +16,10 @@ class AddCategory(BaseModel):
 
 class Category(AddCategory):
     id: UUID4
-    name: Annotated[str, Field(min_length=1)]
 
 class AddProduct(BaseModel):
     name: Annotated[str, Field(min_length=1)]
-    price: Annotated[int, Field(gt=0)]
+    price: Annotated[int, Field(ge=0)]
     categories: list[UUID4]
 
 class Product(AddProduct):
@@ -29,6 +28,7 @@ class Product(AddProduct):
 class AddMember(BaseModel):
     name: Annotated[str, Field(min_length=1)]
     categories: list[UUID4]
+    paid: Annotated[int, Field(ge=0)]
 
 class Member(AddMember):
     id: UUID4

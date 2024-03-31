@@ -58,7 +58,7 @@ export const MemberSettingsModal = ({ open, onClose, board }: { open:boolean, on
                 onChange={(e) => setEdits(draft => {
                     if (draft[memb.id] == null)
                         draft[memb.id] = {}
-                    draft[memb.id].name = e.currentTarget.value
+                    draft[memb.id].name = e.currentTarget?.value??""
                     clearDrafts(draft)
                 })}
                 required

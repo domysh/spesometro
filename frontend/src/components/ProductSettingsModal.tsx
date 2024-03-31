@@ -60,7 +60,7 @@ export const ProductSettingsModal = ({ open, onClose, board }: { open:boolean, o
                 onChange={(e) => setEdits(draft => {
                     if (draft[prod.id] == null)
                         draft[prod.id] = {}
-                    draft[prod.id].name = e.currentTarget.value
+                    draft[prod.id].name = e.currentTarget?.value??""
                     clearDrafts(draft)
                 })}
                 required

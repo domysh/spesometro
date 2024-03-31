@@ -32,8 +32,27 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 app = FastAPI(debug=DEBUG, redoc_url=None, lifespan=lifespan)
 utils.socketio = SocketManager(app, "/sock", socketio_path="")
 
+app.locker = {}
+app.locker_lock = asyncio.Lock()
+
 @utils.socketio.on("update")
 async def updater(): pass
+
+async def id_locker(id: ObjectId):
+    await app.locker_lock.acquire()
+    if ObjectId(id) in app.locker:
+        app.locker_lock.release()
+        await app.locker[id].acquire()
+    else:
+        app.locker[id] = asyncio.Lock()
+        await app.locker[id].acquire()
+        app.locker_lock.release()
+
+async def id_locker_release(id: ObjectId):
+    await app.locker_lock.acquire()
+    if ObjectId(id) in app.locker:
+        app.locker[id].release()
+    app.locker_lock.release()
 
 async def create_access_token(data: dict):
     to_encode = data.copy()
@@ -105,6 +124,7 @@ async def new_board(form: AddBoardForm):
 @editor_api.delete("/boards/{id}", response_model=IdResponse, tags=["board"])
 async def remove_board(id: str):
     """ Create a new board """
+    
     await Board.find_one(Board.id == ObjectId(id)).delete_one()
     await front_refresh()
     return { "id": id }
@@ -116,9 +136,12 @@ async def get_board(id: str):
 
 @editor_api.post("/boards/{id}", response_model=IdResponse, tags=["board"])
 async def edit_board(id: str, form: AddBoardForm):
-    """ Get board """
+    """ Edit board """
+    locker_id = ObjectId(id)
+    await id_locker(locker_id)       
     board = await Board.find_one(Board.id == ObjectId(id))
     await board.set(form)
+    await id_locker_release(locker_id)
     await front_refresh()
     return { "id": id }
 
@@ -140,6 +163,8 @@ async def new_board_categories(id: str, form: AddCategory):
 @editor_api.post("/boards/{id}/categories/{category_id}", response_model=IdResponse, tags=["category"])
 async def edit_board_categories(id: str, category_id: str, form: AddCategory):
     """ Edit a board category """
+    locker_id = ObjectId(id)
+    await id_locker(locker_id)
     board = await Board.find_one(Board.id == ObjectId(id))
     category_id = uuid.UUID(category_id)
     for ele in board.categories:
@@ -147,6 +172,7 @@ async def edit_board_categories(id: str, category_id: str, form: AddCategory):
             for k, v in form.model_dump().items(): setattr(ele, k, v)
             break
     await board.save()
+    await id_locker_release(locker_id)
     await front_refresh()
     return {"id":str(category_id)}
 
@@ -182,6 +208,8 @@ async def new_board_members(id: str, form: AddMember):
 @editor_api.post("/boards/{id}/members/{member_id}", response_model=IdResponse, tags=["member"])
 async def edit_board_members(id: str, member_id: str, form: AddMember):
     """ Edit a board member """
+    locker_id = ObjectId(id)
+    await id_locker(locker_id) 
     board = await Board.find_one(Board.id == ObjectId(id))
     member_id = uuid.UUID(member_id)
     for ele in board.members:
@@ -189,6 +217,7 @@ async def edit_board_members(id: str, member_id: str, form: AddMember):
             for k, v in form.model_dump().items(): setattr(ele, k, v)
             break
     await board.save()
+    await id_locker_release(locker_id)
     await front_refresh()
     return {"id":str(member_id)}
 
@@ -221,6 +250,8 @@ async def new_board_products(id: str, form: AddProduct):
 @editor_api.post("/boards/{id}/products/{product_id}", response_model=IdResponse, tags=["product"])
 async def edit_board_products(id: str, product_id: str, form: AddProduct):
     """ Edit a board product """
+    locker_id = ObjectId(id)
+    await id_locker(locker_id) 
     board = await Board.find_one(Board.id == ObjectId(id))
     product_id = uuid.UUID(product_id)
     for ele in board.products:
@@ -228,6 +259,7 @@ async def edit_board_products(id: str, product_id: str, form: AddProduct):
             for k, v in form.model_dump().items(): setattr(ele, k, v)
             break
     await board.save()
+    await id_locker_release(locker_id)
     await front_refresh()
     return {"id":str(product_id)}
 
@@ -273,6 +305,8 @@ async def new_user(form: AddUser):
 @admin_api.post("/users/{id}", response_model=IdResponse, tags=["user"])
 async def edit_user(id: str, form: AddUser):
     """ Edit a user """
+    locker_id = ObjectId(id)
+    await id_locker(locker_id) 
     form.username = form.username.lower()
     if form.username == "admin":
         raise HTTPException(
@@ -283,6 +317,7 @@ async def edit_user(id: str, form: AddUser):
         form.password = crypto.hash(form.password)
     user = await User.find_one(User.id == ObjectId(id))
     await user.set(form)
+    await id_locker_release(locker_id)
     await front_refresh()
     return {"id":id}
 
@@ -330,5 +365,5 @@ if __name__ == '__main__':
         port=8080,
         reload=DEBUG,
         access_log=True,
-        workers=1
+        workers=3
     )

@@ -1,0 +1,10 @@
+version: '3.9'
+
+services:
+  website:
+    restart: unless-stopped
+    build: .
+    ports:
+      - 127.0.0.1:8080:3005
+    environment:
+      MONGO_URL: CHANGE_ME!

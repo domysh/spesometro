@@ -1,7 +1,7 @@
 FROM --platform=$BUILDPLATFORM oven/bun:1 as frontend
 ENV NODE_ENV=production
 WORKDIR /build
-COPY package.json bun.lockb /build/
+COPY ./frontend/package.json ./frontend/bun.lockb /build/
 RUN bun install
 COPY ./frontend/ .
 RUN bun run build

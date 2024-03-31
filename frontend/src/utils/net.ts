@@ -26,7 +26,7 @@ export const getLink = (url:string, params?: {[p:string]:any}): string => {
     if (import.meta.env.DEV){
         return `http://${DEV_IP_BACKEND}/api`+url+postfix
     }
-    return url+postfix
+    return "/api"+url+postfix
 }
 
 export const elaborateJsonRequest = (res: Response) => {

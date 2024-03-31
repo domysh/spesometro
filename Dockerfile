@@ -14,6 +14,6 @@ WORKDIR /execute
 ADD ./backend/requirements.txt /execute/requirements.txt
 RUN pip3 install --no-cache-dir --break-system-packages -r /execute/requirements.txt --no-warn-script-location
 COPY ./backend/ /execute/
-COPY --from=frontend /app/dist/ ./frontend/
+COPY --from=frontend /build/dist/ ./frontend/
 
 CMD ["python3", "/execute/app.py"]

@@ -330,5 +330,5 @@ if __name__ == '__main__':
         port=8080,
         reload=DEBUG,
         access_log=True,
-        workers=3
+        workers=1
     )

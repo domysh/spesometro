@@ -35,7 +35,7 @@ socketio = SocketManager(app, "/sock", socketio_path="")
 async def socketio_emit(elements:list[str]):
     await socketio.emit("update",elements)
 
-@socketio.on("update")
+@app.sio.on("update")
 async def updater(): pass
 
 async def create_access_token(data: dict):

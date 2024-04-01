@@ -3,6 +3,7 @@ import { postFormRequest } from "@/utils/net";
 import { Box, Button, Group, PasswordInput, Space, TextInput, Title } from "@mantine/core"
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications'
+import { useEffect } from "react";
 
 export const LoginProvider = ({ children }: { children:any }) => {
 
@@ -20,9 +21,15 @@ export const LoginProvider = ({ children }: { children:any }) => {
         },
     });
     
+    useEffect(() => {
+        setLoading(false)
+        form.reset()
+    },[token])
+
     if (token){
         return <>{children}</>
     }
+
     return <Box className="center-flex-col" style={{
         width: "100%",
         height: "100%"
@@ -37,7 +44,6 @@ export const LoginProvider = ({ children }: { children:any }) => {
             setLoading(true)
             postFormRequest("login", {body: values})
             .then( (res) => {
-                console.log(res)
                 if(res.access_token){
                     setToken(res.access_token)
                 }else{

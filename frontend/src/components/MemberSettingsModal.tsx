@@ -1,7 +1,7 @@
-import { useLoading } from "@/utils";
+import { useCalculateDebits, useLoading } from "@/utils";
 import { deleteRequest, postRequest, putRequest } from "@/utils/net";
 import { board, member } from "@/utils/types";
-import { Box, Button, Group, Modal, NumberInput, Space, Table, TextInput } from "@mantine/core";
+import { Box, Button, Group, Modal, Space, Table, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import { YesOrNoModal } from "./YesOrNoModal";
 import { AddButton, DeleteButton, EditButton } from "./Buttons";
 import { useImmer } from 'use-immer';
+import { BalanceIcon } from "./Utils";
+import { AdvancedNumberInput } from "./AdvancedNumberInput";
 
 export const MemberSettingsModal = ({ open, onClose, board }: { open:boolean, onClose:()=>void, board:board }) => {
 
@@ -25,6 +27,8 @@ export const MemberSettingsModal = ({ open, onClose, board }: { open:boolean, on
             name: (val) => val == ""? "Name is required" : null,
         },
     })
+
+    const debits = useCalculateDebits(board)
 
     useEffect(() => {
         formAdd.reset()
@@ -50,8 +54,12 @@ export const MemberSettingsModal = ({ open, onClose, board }: { open:boolean, on
         })
     }
 
-    const rows = board.members.map((memb) => (
-        <Table.Tr key={memb.id}>
+    const rows = board.members.map((memb) => {
+        const debit = debits.find((ele)=>ele.id == memb.id)?.price??0
+        const paid = edits[memb.id]?.paid??memb.paid??0
+        const balance = paid - debit
+        return <Table.Tr key={memb.id}>
+          <Table.Td><BalanceIcon balance={balance} /></Table.Td>
           <Table.Td width="100%">
             <TextInput
                 value={edits[memb.id]?.name??memb.name}
@@ -64,26 +72,25 @@ export const MemberSettingsModal = ({ open, onClose, board }: { open:boolean, on
                 required
             />
           </Table.Td>
+          <Table.Td>{(debit/100.0).toFixed(2).replace(".",",")}</Table.Td>
+          <Table.Td>{(balance/100.0).toFixed(2).replace(".",",")}</Table.Td>
           <Table.Td>
-            <NumberInput
-                fixedDecimalScale={true}
-                decimalScale={2}
-                min={0}
-                decimalSeparator=","
-                style={{ width: 100 }}
-                value={(edits[memb.id]?.paid??memb.paid)/100.0}
-                onChange={(e) => setEdits(draft => {
+            <AdvancedNumberInput
+                placeholder="0,00"
+                type="text"
+                value={(paid/100.0).toFixed(2).replace(".",",")}
+                onChange={(v) => setEdits(draft => {
                     if (draft[memb.id] == null)
                         draft[memb.id] = {}
-                    draft[memb.id].paid = parseInt((parseFloat(e.toString())*100).toString())
+                    draft[memb.id].paid = v.mul(100).round(0).toNumber()
                     clearDrafts(draft)
                 })}
-                required
+                style={{ width: 100 }}
             />
           </Table.Td>
           <Table.Td><DeleteMember board={board} member={memb}/></Table.Td>
         </Table.Tr>
-      ));
+    });
 
     return <>
     <Modal opened={open} onClose={onClose} title={"Members - "+board.name} centered fullScreen>
@@ -111,7 +118,10 @@ export const MemberSettingsModal = ({ open, onClose, board }: { open:boolean, on
         <Table stickyHeader stickyHeaderOffset={60} verticalSpacing="md">
           <Table.Thead>
             <Table.Tr>
+              <Table.Th>Status</Table.Th>
               <Table.Th>Name</Table.Th>
+              <Table.Th>Debit</Table.Th>
+              <Table.Th>Balance</Table.Th>
               <Table.Th>Paid</Table.Th>
               <Table.Th>Delete</Table.Th>
             </Table.Tr>

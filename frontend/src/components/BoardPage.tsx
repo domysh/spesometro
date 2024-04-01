@@ -1,8 +1,8 @@
-import { getToken } from "@/utils"
+import { getToken, useCalculateDebits } from "@/utils"
 import { boardsQuery } from "@/utils/queries"
 import { Role, board } from "@/utils/types"
 import { Checkbox, Menu, SegmentedControl, Space, Table, Title } from "@mantine/core"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { BackButton, OptionButton } from "./Buttons"
 import { postRequest } from "@/utils/net"
@@ -16,6 +16,7 @@ import { BoardSettingsModal } from "./BoardSettingModal"
 import { CategorySettingsModal } from "./CategorySettingsModal"
 import { MemberSettingsModal } from "./MemberSettingsModal"
 import { ProductSettingsModal } from "./ProductSettingsModal"
+import { BalanceIcon } from "./Utils"
 
 export const BoardPage = ({ setHeader }:{ setHeader:(p:any)=>void }) => {
     const boards = boardsQuery()
@@ -99,28 +100,13 @@ export const MembersTable = ({ board }:{ board: board }) => {
     const canEdit = [Role.ADMIN, Role.EDITOR].includes(currentUser.role??Role.GUEST)
     const queryClient = useQueryClient()
 
-    const productCounter = useMemo(() => board.products.map((prod) => {
-        let counter = 0
-        board.members.forEach((memb) => {
-            if (memb.categories.some((cat) => prod.categories.includes(cat))) {
-                counter++
-            }
-        })
-        return { id: prod.id, cout:counter }
-    }), [board])
+    const userDebitCounter = useCalculateDebits(board)
 
-    const userDebitCounter = useMemo(() => board.members.map((memb) => {
-        let counter = 0
-        board.products.forEach((prod) => {
-            if (memb.categories.some((cat) => prod.categories.includes(cat))) {
-                counter += (prod.price*1.0)/(productCounter.find((p) => p.id === prod.id)?.cout??1)
-            }
-        })
-        return { id: memb.id, price:counter }
-    }), [board])
-
-    const rows = board.members.map((memb) => (
-        <Table.Tr key={memb.id}>
+    const rows = board.members.map((memb) => {
+        const debit = userDebitCounter.find((ele)=>ele.id == memb.id)?.price??0
+        const balance = memb.paid - debit
+        return <Table.Tr key={memb.id}>
+          <Table.Td><BalanceIcon balance={balance} /></Table.Td>
           <Table.Td>{memb.name}</Table.Td>
           {board.categories.map((cat) => (<Table.Td key={cat.id}>
                 {canEdit?<>
@@ -151,15 +137,16 @@ export const MembersTable = ({ board }:{ board: board }) => {
                 </>:memb.categories.includes(cat.id)?"✅":"❌"}
           </Table.Td>))}
           <Table.Td>{(memb.paid/100.).toFixed(2).replace(".", ",")}</Table.Td>
-          <Table.Td>{((userDebitCounter.find((ele)=>ele.id == memb.id)?.price??0)/100.).toFixed(2).replace(".", ",")}</Table.Td>
-          <Table.Td>{((memb.paid - (userDebitCounter.find((ele)=>ele.id == memb.id)?.price??0))/100.).toFixed(2).replace(".", ",")}</Table.Td>
+          <Table.Td>{(debit/100.).toFixed(2).replace(".", ",")}</Table.Td>
+          <Table.Td>{(balance/100.).toFixed(2).replace(".", ",")}</Table.Td>
         </Table.Tr>
-      ));
+    });
     
       return (
         <Table stickyHeader stickyHeaderOffset={60} verticalSpacing="md">
           <Table.Thead>
             <Table.Tr>
+              <Table.Th>Status</Table.Th>
               <Table.Th>Member</Table.Th>
               {board.categories.map((cat) => (
                     <Table.Th key={cat.id}>{cat.name}</Table.Th>

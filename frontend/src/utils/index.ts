@@ -1,5 +1,6 @@
 import { readLocalStorageValue, readSessionStorageValue, useLocalStorage, useSessionStorage } from "@mantine/hooks";
-import { Role } from "./types";
+import { Role, board } from "./types";
+import { useMemo } from "react";
 
 export const useToken = () => useLocalStorage({
     key: "login-token",
@@ -24,3 +25,25 @@ export const getLoading = () => readSessionStorageValue({
     key: "glob-loading",
     defaultValue: false
 })
+
+export const useCalculateDebits = (board: board) => {
+    const productCounter = useMemo(() => board.products.map((prod) => {
+        let counter = 0
+        board.members.forEach((memb) => {
+            if (memb.categories.some((cat) => prod.categories.includes(cat))) {
+                counter++
+            }
+        })
+        return { id: prod.id, cout:counter }
+    }), [board])
+
+    return useMemo(() => board.members.map((memb) => {
+        let counter = 0
+        board.products.forEach((prod) => {
+            if (memb.categories.some((cat) => prod.categories.includes(cat))) {
+                counter += (prod.price*1.0)/(productCounter.find((p) => p.id === prod.id)?.cout??1)
+            }
+        })
+        return { id: memb.id, price:parseInt(counter.toFixed(0)) }
+    }), [board])
+}

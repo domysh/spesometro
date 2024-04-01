@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { YesOrNoModal } from "./YesOrNoModal";
 import { AddButton, DeleteButton, EditButton } from "./Buttons";
 import { useImmer } from 'use-immer';
+import { AdvancedNumberInput } from "./AdvancedNumberInput";
 
 export const ProductSettingsModal = ({ open, onClose, board }: { open:boolean, onClose:()=>void, board:board }) => {
 
@@ -67,20 +68,17 @@ export const ProductSettingsModal = ({ open, onClose, board }: { open:boolean, o
             />
           </Table.Td>
           <Table.Td>
-            <NumberInput
-                fixedDecimalScale={true}
-                decimalScale={2}
-                min={0}
-                decimalSeparator=","
-                style={{ width: 100 }}
-                value={(edits[prod.id]?.price??prod.price)/100.0}
-                onChange={(e) => setEdits(draft => {
+            <AdvancedNumberInput
+                placeholder="0,00"
+                type="text"
+                value={((edits[prod.id]?.price??prod.price)/100.0).toFixed(2).replace(".",",")}
+                onChange={(v) => setEdits(draft => {
                     if (draft[prod.id] == null)
                         draft[prod.id] = {}
-                    draft[prod.id].price = parseInt((parseFloat(e.toString())*100).toString())
+                    draft[prod.id].price = v.mul(100).round(0).toNumber()
                     clearDrafts(draft)
                 })}
-                required
+                style={{ width: 100 }}
             />
           </Table.Td>
           <Table.Td><DeleteProduct board={board} product={prod}/></Table.Td>

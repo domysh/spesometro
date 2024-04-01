@@ -19,7 +19,7 @@ from db import Role, init_db, shutdown_db, User, first_run, Board
 from fastapi.responses import FileResponse
 
 async def front_refresh(additional:list[str]=None):
-    await socketio_emit([] if additional is None else additional)
+    await app.sio.emit("update",[] if additional is None else additional)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,9 +31,7 @@ async def lifespan(app: FastAPI):
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 app = FastAPI(debug=DEBUG, redoc_url=None, lifespan=lifespan)
 socketio = SocketManager(app, "/sock", socketio_path="")
-
-async def socketio_emit(elements:list[str]):
-    await socketio.emit("update",elements)
+    
 
 @app.sio.on("update")
 async def updater(): pass

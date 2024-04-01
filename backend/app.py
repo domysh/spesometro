@@ -13,7 +13,7 @@ import uuid, time
 from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi_socketio import SocketManager
-from utils import crypto, socketio_emit
+from utils import crypto
 from env import DEBUG, JWT_ALGORITHM, APP_SECRET, JWT_EXPIRE_H
 from db import Role, init_db, shutdown_db, User, first_run, Board
 from fastapi.responses import FileResponse
@@ -30,9 +30,12 @@ async def lifespan(app: FastAPI):
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 app = FastAPI(debug=DEBUG, redoc_url=None, lifespan=lifespan)
-utils.socketio = SocketManager(app, "/sock", socketio_path="")
+socketio = SocketManager(app, "/sock", socketio_path="")
 
-@utils.socketio.on("update")
+async def socketio_emit(elements:list[str]):
+    await socketio.emit("update",elements)
+
+@socketio.on("update")
 async def updater(): pass
 
 async def create_access_token(data: dict):

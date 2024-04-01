@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from contextlib import asynccontextmanager
 from jose import jwt
-from bson import ObjectId
+from bson import ObjectId, Binary
 from models import *
 import uuid, time
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,7 +17,6 @@ from utils import crypto, socketio_emit
 from env import DEBUG, JWT_ALGORITHM, APP_SECRET, JWT_EXPIRE_H
 from db import Role, init_db, shutdown_db, User, first_run, Board
 from fastapi.responses import FileResponse
-from filelock import FileLock
 
 async def front_refresh(additional:list[str]=None):
     await socketio_emit([] if additional is None else additional)
@@ -33,34 +32,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 app = FastAPI(debug=DEBUG, redoc_url=None, lifespan=lifespan)
 utils.socketio = SocketManager(app, "/sock", socketio_path="")
 
-os.chdir(os.path.dirname(os.path.realpath(__file__)))
-if not os.path.exists("locks"): os.mkdir("locks")
-
-locker_lock = FileLock("locks/locker.lock")
-locker = {}
-
 @utils.socketio.on("update")
 async def updater(): pass
-
-def id_locker(id: ObjectId):
-    locker_lock.acquire()
-    """
-    if ObjectId(id) in app.locker:
-        app.locker_lock.release()
-        app.locker[id].acquire()
-    else:
-        app.locker[id] = FileLock("locks/locker_"+id.binary.hex().lower()+".lock")
-        app.locker[id].acquire()
-        app.locker_lock.release()
-    """
-
-def id_locker_release(id: ObjectId):
-    """
-    app.locker_lock.acquire()
-    if ObjectId(id) in app.locker:
-        app.locker[id].release()
-    """
-    locker_lock.release()
 
 async def create_access_token(data: dict):
     to_encode = data.copy()
@@ -98,6 +71,12 @@ def has_role(target:Role|None = None):
         )
     return func
 
+def mongo_dict_update(base:str, target:dict):
+    res = {}
+    for k, v in target.items():
+        res[base+"."+k] = v
+    return res
+
 api = APIRouter(prefix="/api", dependencies=[Depends(has_role())])
 editor_api = APIRouter(prefix="/api", dependencies=[Depends(has_role(Role.editor))])
 admin_api = APIRouter(prefix="/api", dependencies=[Depends(has_role(Role.admin))])
@@ -114,7 +93,6 @@ async def login_api(form: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(406,"User not found!")
     if not crypto.verify(form.password, user.password):
         raise HTTPException(406,"Wrong password!")
-    
     return {"access_token": await create_access_token({"userid": user.id.binary.hex(), "role": user.role}), "token_type": "bearer"}
 
 @guest_api.get("/boards", response_model=list[BoardDTO], tags=["board"])
@@ -132,7 +110,6 @@ async def new_board(form: AddBoardForm):
 @editor_api.delete("/boards/{id}", response_model=IdResponse, tags=["board"])
 async def remove_board(id: str):
     """ Create a new board """
-    
     await Board.find_one(Board.id == ObjectId(id)).delete_one()
     await front_refresh()
     return { "id": id }
@@ -145,14 +122,8 @@ async def get_board(id: str):
 @editor_api.post("/boards/{id}", response_model=IdResponse, tags=["board"])
 async def edit_board(id: str, form: AddBoardForm):
     """ Edit board """
-    locker_id = ObjectId(id)
-    id_locker(locker_id)
-    try:    
-        board = await Board.find_one(Board.id == ObjectId(id))
-        await board.set(form)
-        await board.sync()
-    finally:
-        id_locker_release(locker_id)
+    board = await Board.find_one(Board.id == ObjectId(id))
+    await board.set(form)
     await front_refresh()
     return { "id": id }
 
@@ -161,46 +132,39 @@ async def get_board_categories(id: str):
     """ Get board category list """
     return (await Board.find_one(Board.id == ObjectId(id))).categories
 
+
 @editor_api.put("/boards/{id}/categories", response_model=IdResponse, tags=["category"])
 async def new_board_categories(id: str, form: AddCategory):
     """ Add a new board category """
-    board = await Board.find_one(Board.id == ObjectId(id))
     new_id = uuid.uuid4()
-    board.categories.append(Category(**form.model_dump(), id=new_id))
-    await board.save()
+    await Board.find_one(Board.id == ObjectId(id)).update_one(
+        {"$push": { "categories": Category(**form.model_dump(), id=new_id).model_dump() }}
+    )
     await front_refresh()
     return {"id":str(new_id)}
 
 @editor_api.post("/boards/{id}/categories/{category_id}", response_model=IdResponse, tags=["category"])
 async def edit_board_categories(id: str, category_id: str, form: AddCategory):
     """ Edit a board category """
-    locker_id = ObjectId(id)
-    id_locker(locker_id)
-    try:
-        board = await Board.find_one(Board.id == ObjectId(id))
-        category_id = uuid.UUID(category_id)
-        for ele in board.categories:
-            if ele.id == category_id:
-                for k, v in form.model_dump().items(): setattr(ele, k, v)
-                break
-        await board.save()
-        await board.sync()
-    finally:
-        id_locker_release(locker_id)
+    category_id = uuid.UUID(category_id)
+    await Board.find_one(Board.id == ObjectId(id)).update_one(
+        {"$set": mongo_dict_update("categories.$[cat]", form.model_dump())},
+        array_filters=[ {"cat.id": Binary.from_uuid(category_id)}]
+    )
     await front_refresh()
     return {"id":str(category_id)}
 
 @editor_api.delete("/boards/{id}/categories/{category_id}", response_model=IdResponse, tags=["category"])
 async def delete_board_categories(id: str, category_id: str):
     """ Delete a board category """
-    board = await Board.find_one(Board.id == ObjectId(id))
     category_id = uuid.UUID(category_id)
-    board.categories = [ele for ele in board.categories if ele.id != category_id]
-    for prod in board.products:
-        prod.categories = [ele for ele in prod.categories if ele != category_id]
-    for memb in board.members:
-        memb.categories = [ele for ele in memb.categories if ele != category_id]
-    await board.save()
+    await Board.find_one(Board.id == ObjectId(id)).update_one(
+        {"$pull": {
+            "categories": { "id": Binary.from_uuid(category_id) },
+            "products.$[].categories": Binary.from_uuid(category_id),
+            "members.$[].categories": Binary.from_uuid(category_id),
+        }}
+    )
     await front_refresh()
     return {"id":str(category_id)}
     
@@ -212,42 +176,33 @@ async def get_board_members(id: str):
 @editor_api.put("/boards/{id}/members", response_model=IdResponse, tags=["member"])
 async def new_board_members(id: str, form: AddMember):
     """ Add a new board member """
-    board = await Board.find_one(Board.id == ObjectId(id))
     new_id = uuid.uuid4()
-    board.members.append(Member(**form.model_dump(), id=new_id))
-    await board.save()
+    await Board.find_one(Board.id == ObjectId(id)).update_one(
+        {"$push": { "members": Member(**form.model_dump(), id=new_id).model_dump() }}
+    )
     await front_refresh()
     return {"id":str(new_id)}
 
 @editor_api.post("/boards/{id}/members/{member_id}", response_model=IdResponse, tags=["member"])
 async def edit_board_members(id: str, member_id: str, form: AddMember):
     """ Edit a board member """
-    locker_id = ObjectId(id)
-    id_locker(locker_id)
-    try:
-        board = await Board.find_one(Board.id == ObjectId(id))
-        member_id = uuid.UUID(member_id)
-        for ele in board.members:
-            if ele.id == member_id:
-                for k, v in form.model_dump().items(): setattr(ele, k, v)
-                break
-        await board.save()
-        await board.sync()
-    finally:
-        id_locker_release(locker_id)
+    member_id = uuid.UUID(member_id)
+    await Board.find_one(Board.id == ObjectId(id)).update_one(
+        {"$set": mongo_dict_update("members.$[memb]", form.model_dump()) },
+        array_filters=[ {"memb.id": Binary.from_uuid(member_id)}]
+    )
     await front_refresh()
     return {"id":str(member_id)}
 
 @editor_api.delete("/boards/{id}/members/{member_id}", response_model=IdResponse, tags=["member"])
 async def delete_board_members(id: str, member_id: str):
     """ Delete a board category """
-    board = await Board.find_one(Board.id == ObjectId(id))
     member_id = uuid.UUID(member_id)
-    board.members = [ele for ele in board.members if ele.id != member_id]
-    await board.save()
+    await Board.find_one(Board.id == ObjectId(id)).update_one(
+        {"$pull": { "members": { "id": Binary.from_uuid(member_id)} }}
+    )
     await front_refresh()
     return {"id":str(member_id)}
-    
 
 @guest_api.get("/boards/{id}/products", response_model=list[Product], tags=["product"])
 async def get_board_products(id: str):
@@ -257,39 +212,31 @@ async def get_board_products(id: str):
 @editor_api.put("/boards/{id}/products", response_model=IdResponse, tags=["product"])
 async def new_board_products(id: str, form: AddProduct):
     """ Add a new board product """
-    board = await Board.find_one(Board.id == ObjectId(id))
     new_id = uuid.uuid4()
-    board.products.append(Product(**form.model_dump(), id=new_id))
-    await board.save()
+    await Board.find_one(Board.id == ObjectId(id)).update_one(
+        {"$push": { "products": Product(**form.model_dump(), id=new_id).model_dump() }}
+    )
     await front_refresh()
     return {"id":str(new_id)}
 
 @editor_api.post("/boards/{id}/products/{product_id}", response_model=IdResponse, tags=["product"])
 async def edit_board_products(id: str, product_id: str, form: AddProduct):
     """ Edit a board product """
-    locker_id = ObjectId(id)
-    id_locker(locker_id)
-    try:
-        board = await Board.find_one(Board.id == ObjectId(id))
-        product_id = uuid.UUID(product_id)
-        for ele in board.products:
-            if ele.id == product_id:
-                for k, v in form.model_dump().items(): setattr(ele, k, v)
-                break
-        await board.save()
-        await board.sync()
-    finally:
-        id_locker_release(locker_id)
+    product_id = uuid.UUID(product_id)
+    await Board.find_one(Board.id == ObjectId(id)).update_one(
+        {"$set": mongo_dict_update("products.$[prod]", form.model_dump())},
+        array_filters=[ {"prod.id": Binary.from_uuid(product_id)}]
+    )
     await front_refresh()
     return {"id":str(product_id)}
 
 @editor_api.delete("/boards/{id}/products/{product_id}", response_model=IdResponse, tags=["product"])
 async def delete_board_products(id: str, product_id: str):
     """ Delete a board product """
-    board = await Board.find_one(Board.id == ObjectId(id))
     product_id = uuid.UUID(product_id)
-    board.products = [ele for ele in board.products if ele.id != product_id]
-    await board.save()
+    await Board.find_one(Board.id == ObjectId(id)).update_one(
+        {"$pull": { "products": { "id": Binary.from_uuid(product_id)} }}
+    )
     await front_refresh()
     return {"id":str(product_id)}
 
@@ -325,22 +272,16 @@ async def new_user(form: AddUser):
 @admin_api.post("/users/{id}", response_model=IdResponse, tags=["user"])
 async def edit_user(id: str, form: AddUser):
     """ Edit a user """
-    locker_id = ObjectId(id)
-    id_locker(locker_id)
-    try:
-        form.username = form.username.lower()
-        if form.username == "admin":
-            raise HTTPException(
-                status_code=400,
-                detail="'admin' is reserved"
-            )
-        if form.password:
-            form.password = crypto.hash(form.password)
-        user = await User.find_one(User.id == ObjectId(id))
-        await user.set(form)
-        await user.sync()
-    finally:
-        id_locker_release(locker_id)
+    form.username = form.username.lower()
+    if form.username == "admin":
+        raise HTTPException(
+            status_code=400,
+            detail="'admin' is reserved"
+        )
+    if form.password:
+        form.password = crypto.hash(form.password)
+    user = await User.find_one(User.id == ObjectId(id))
+    await user.set(form)
     await front_refresh()
     return {"id":id}
 
@@ -380,6 +321,7 @@ else:
     )
 
 if __name__ == '__main__':
+    os.chdir(os.path.dirname(os.path.realpath(__file__)))
     asyncio.run(first_run())
     uvicorn.run(
         "app:app",

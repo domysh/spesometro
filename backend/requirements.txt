@@ -9,5 +9,4 @@ beanie
 motor
 aiocache
 python-dotenv
-filelock
 

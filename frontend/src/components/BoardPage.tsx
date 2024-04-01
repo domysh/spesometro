@@ -232,7 +232,7 @@ export const ProductsTable = ({ board }:{ board: board }) => {
             {rows}
             <Table.Tr key="tot">
                 <Table.Td>Total</Table.Td>
-                <Table.Td>{(board.products.map((v)=>v.price).reduce((acc, val)=>acc+val)/100.0).toFixed(2).replace(".",",")}</Table.Td>
+                <Table.Td>{([0].concat(board.products.map((v)=>v.price)).reduce((acc, val)=>acc+val)/100.0).toFixed(2).replace(".",",")}</Table.Td>
                 </Table.Tr>
           </Table.Tbody>
         </Table>

@@ -20,15 +20,24 @@ class Board(Document):
     categories: list[Category]
     products: list[Product]
     members: list[Member]
+    class Settings:
+        use_state_management = True
+        state_management_save_previous = True
 
 class User(Document):
     username: Annotated[str,Indexed(unique=True)]
     password: str
     role: Role
+    class Settings:
+        use_state_management = True
+        state_management_save_previous = True
 
 class Env(Document):
     key: Annotated[str,Indexed(unique=True)]
     value: str
+    class Settings:
+        use_state_management = True
+        state_management_save_previous = True
 
 async def init_db():
     # Initialize beanie with the Product document class

@@ -1,7 +1,7 @@
 import { getToken, useCalculateDebits } from "@/utils"
 import { boardsQuery } from "@/utils/queries"
 import { Role, board } from "@/utils/types"
-import { Checkbox, Menu, SegmentedControl, Space, Table, Title } from "@mantine/core"
+import { Checkbox, Loader, Menu, SegmentedControl, Space, Table, Title } from "@mantine/core"
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { BackButton, OptionButton } from "./Buttons"
@@ -17,6 +17,7 @@ import { CategorySettingsModal } from "./CategorySettingsModal"
 import { MemberSettingsModal } from "./MemberSettingsModal"
 import { ProductSettingsModal } from "./ProductSettingsModal"
 import { BalanceIcon } from "./Utils"
+import { useImmer } from "use-immer"
 
 export const BoardPage = ({ setHeader }:{ setHeader:(p:any)=>void }) => {
     const boards = boardsQuery()
@@ -54,20 +55,28 @@ export const BoardPage = ({ setHeader }:{ setHeader:(p:any)=>void }) => {
                     <Menu.Item
                         leftSection={<IoMdSettings />}
                         onClick={() => setBoardSettingsOpened(true)}
-                    >Settings</Menu.Item>
+                    >
+                        Settings
+                    </Menu.Item>
                     <Menu.Label>Add, Edit or Remove</Menu.Label>
                     <Menu.Item
                         leftSection={<MdCategory />}
                         onClick={() => setCategorySettingsOpened(true)}
-                    >Category</Menu.Item>
+                    >
+                        Category
+                    </Menu.Item>
                     <Menu.Item
                         leftSection={<BsFillPeopleFill />}
                         onClick={() => setMemberSettingsOpened(true)}
-                    >Members</Menu.Item>
+                    >
+                        Members
+                    </Menu.Item>
                     <Menu.Item
                         leftSection={<MdOutlineProductionQuantityLimits />}
                         onClick={() => setProductSettingsOpened(true)}
-                    >Products</Menu.Item>
+                    >
+                        Products
+                    </Menu.Item>
                 </Menu.Dropdown>
                 </Menu>
             </>:null}
@@ -99,22 +108,27 @@ export const MembersTable = ({ board }:{ board: board }) => {
     const currentUser = getToken()
     const canEdit = [Role.ADMIN, Role.EDITOR].includes(currentUser.role??Role.GUEST)
     const queryClient = useQueryClient()
+    const [loadingTable, updateLoadingTable] = useImmer<{[id:string]:true}>({})
 
     const userDebitCounter = useCalculateDebits(board)
 
     const rows = board.members.map((memb) => {
         const debit = userDebitCounter.find((ele)=>ele.id == memb.id)?.price??0
         const balance = memb.paid - debit
+        
         return <Table.Tr key={memb.id}>
           <Table.Td><BalanceIcon balance={balance} /></Table.Td>
           <Table.Td>{memb.name}</Table.Td>
           {board.categories.map((cat) => (<Table.Td key={cat.id}>
                 {canEdit?<>
-                    <Checkbox
+                    {(loadingTable[memb.id+cat.id]??false)?
+                    <Loader color="blue" size={20} />
+                    :<Checkbox
                         checked={memb.categories.includes(cat.id)}
                         color={memb.categories.includes(cat.id)?"lime":"red"}
                         onClick={() => {
                             const newCategories = memb.categories.includes(cat.id)?memb.categories.filter((c) => c !== cat.id):[...memb.categories, cat.id]
+                            updateLoadingTable((draft)=>{draft[memb.id+cat.id] = true})
                             postRequest(`boards/${board.id}/members/${memb.id}`, {
                                 body: {
                                     ...memb,
@@ -130,10 +144,11 @@ export const MembersTable = ({ board }:{ board: board }) => {
                             })
                             .finally(() => {
                                 queryClient.invalidateQueries()
+                                updateLoadingTable((draft)=>{delete draft[memb.id+cat.id]})
                             })
                         }}
                         readOnly
-                    />
+                    />}
                 </>:memb.categories.includes(cat.id)?"✅":"❌"}
           </Table.Td>))}
           <Table.Td>{(memb.paid/100.).toFixed(2).replace(".", ",")}</Table.Td>
@@ -165,6 +180,7 @@ export const ProductsTable = ({ board }:{ board: board }) => {
 
     const currentUser = getToken()
     const canEdit = [Role.ADMIN, Role.EDITOR].includes(currentUser.role??Role.GUEST)
+    const [loadingTable, updateLoadingTable] = useImmer<{[id:string]:true}>({})
 
     const queryClient = useQueryClient()
 
@@ -175,11 +191,14 @@ export const ProductsTable = ({ board }:{ board: board }) => {
           <Table.Td>{(prod.price/100.).toFixed(2).replace(".", ",")}</Table.Td>
           {board.categories.map((cat) => (<Table.Td key={cat.id}>
                 {canEdit?<>
-                    <Checkbox
+                    {(loadingTable[prod.id+cat.id]??false)?
+                    <Loader color="blue" size={20} />
+                    :<Checkbox
                         checked={prod.categories.includes(cat.id)}
                         color={prod.categories.includes(cat.id)?"lime":"red"}
                         onClick={() => {
                             const newCategories = prod.categories.includes(cat.id)?prod.categories.filter((c) => c !== cat.id):[...prod.categories, cat.id]
+                            updateLoadingTable((draft)=>{draft[prod.id+cat.id] = true})
                             postRequest(`boards/${board.id}/products/${prod.id}`, {
                                 body: {
                                     ...prod,
@@ -195,10 +214,11 @@ export const ProductsTable = ({ board }:{ board: board }) => {
                             })
                             .finally(() => {
                                 queryClient.invalidateQueries()
+                                updateLoadingTable((draft)=>{delete draft[prod.id+cat.id]})
                             })
                         }}
                         readOnly
-                    />
+                    />}
                 </>:prod.categories.includes(cat.id)?"✅":"❌"}
           </Table.Td>))}
         </Table.Tr>

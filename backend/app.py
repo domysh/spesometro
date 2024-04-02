@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import uvicorn, utils
+import uvicorn, socketio
 import os, asyncio
 from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -12,14 +12,13 @@ from models import *
 import uuid, time
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi_socketio import SocketManager
 from utils import crypto
 from env import DEBUG, JWT_ALGORITHM, APP_SECRET, JWT_EXPIRE_H
 from db import Role, init_db, shutdown_db, User, first_run, Board
 from fastapi.responses import FileResponse
 
-async def front_refresh(additional:list[str]=None):
-    await app.sio.emit("update",[] if additional is None else additional)
+sio_server = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")
+sio_app = socketio.ASGIApp(sio_server, socketio_path="")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,11 +29,17 @@ async def lifespan(app: FastAPI):
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 app = FastAPI(debug=DEBUG, redoc_url=None, lifespan=lifespan)
-socketio = SocketManager(app, "/sock", socketio_path="")
-    
 
-@app.sio.on("update")
-async def updater(): pass
+app.mount("/sock", app=sio_app)
+
+@sio_server.on("connect")
+async def sio_connect(sid, environ): pass
+
+@sio_server.on("disconnect")
+async def sio_disconnect(sid): pass
+
+async def front_refresh(additional:list[str]=None):
+    await sio_server.emit("update",[] if additional is None else additional)
 
 async def create_access_token(data: dict):
     to_encode = data.copy()

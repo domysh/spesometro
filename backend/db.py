@@ -10,7 +10,7 @@ from utils import crypto
 MONGO_URL = os.getenv('MONGO_URL')
 assert not MONGO_URL is None
 DEFAULT_PSW = os.getenv('DEFAULT_PSW')
-DB_NAME = os.getenv('DB_NAME', "spesometro")
+DB_NAME = os.getenv('DB_NAME', "splitify")
 
 db_client = AsyncIOMotorClient(MONGO_URL)
 from models import Category, Product, Member

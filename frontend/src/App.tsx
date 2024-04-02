@@ -68,7 +68,7 @@ export default function App() {
             }}>
               <Space w="md" />
               <Title order={2} >
-                Spesometro 🛍️
+                Splitify 🛍️
               </Title>
               <Box style={{ flexGrow: 1 }} />
               {header}

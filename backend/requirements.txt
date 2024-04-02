@@ -9,4 +9,5 @@ beanie
 motor
 aiocache
 python-dotenv
+redis
 

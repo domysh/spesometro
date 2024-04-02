@@ -8,3 +8,6 @@ services:
       - 127.0.0.1:80:8080
     environment:
       MONGO_URL: CHANGE_ME!
+  redis:
+    image: redis:7
+    restart: unless-stopped

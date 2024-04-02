@@ -17,7 +17,10 @@ from env import DEBUG, CORS_ALLOW, JWT_ALGORITHM, APP_SECRET, JWT_EXPIRE_H
 from db import Role, init_db, shutdown_db, User, first_run, Board
 from fastapi.responses import FileResponse
 
-sio_server = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*")
+redis_mgr = socketio.AsyncRedisManager(
+    url="redis://localhost:6379/0" if DEBUG else "redis://redis:6379/0",
+) 
+sio_server = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins="*", client_manager=redis_mgr)
 sio_app = socketio.ASGIApp(sio_server, socketio_path="")
 
 @asynccontextmanager
@@ -330,11 +333,12 @@ app.mount("/sock", app=sio_app)
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
     asyncio.run(first_run())
+    os.environ["TIMEOUT"] = "30"
     uvicorn.run(
         "app:app",
         host="0.0.0.0",
         port=8080,
         reload=DEBUG,
         access_log=True,
-        workers=2 # If needed more, we need a redis server for socketio
+        workers=3 # If needed more, we need a redis server for socketio
     )

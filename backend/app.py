@@ -13,7 +13,7 @@ import uuid, time
 from fastapi.middleware.cors import CORSMiddleware
 
 from utils import crypto
-from env import DEBUG, JWT_ALGORITHM, APP_SECRET, JWT_EXPIRE_H
+from env import DEBUG, CORS_ALLOW, JWT_ALGORITHM, APP_SECRET, JWT_EXPIRE_H
 from db import Role, init_db, shutdown_db, User, first_run, Board
 from fastapi.responses import FileResponse
 
@@ -29,8 +29,6 @@ async def lifespan(app: FastAPI):
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 app = FastAPI(debug=DEBUG, redoc_url=None, lifespan=lifespan)
-
-app.mount("/sock", app=sio_app)
 
 @sio_server.on("connect")
 async def sio_connect(sid, environ): pass
@@ -317,7 +315,8 @@ if not DEBUG:
             return FileResponse("frontend/index.html", media_type='text/html')
         else:
             return FileResponse(file_request)
-else:
+
+if DEBUG or CORS_ALLOW:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -325,6 +324,8 @@ else:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+app.mount("/sock", app=sio_app)
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
@@ -335,5 +336,5 @@ if __name__ == '__main__':
         port=8080,
         reload=DEBUG,
         access_log=True,
-        workers=3
+        workers=2 # If needed more, we need a redis server for socketio
     )

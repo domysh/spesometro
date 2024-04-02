@@ -4,6 +4,7 @@ from db import Env
 from aiocache import cached
 
 DEBUG = os.getenv("DEBUG", "").lower() in ["true", "1", "t"]
+CORS_ALLOW = os.getenv("CORS_ALLOW", "").lower() in ["true", "1", "t"]
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_H = 3

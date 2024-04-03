@@ -2,7 +2,7 @@ import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css'
 
 import { Notifications } from '@mantine/notifications';
-import { AppShell, Box, Container, LoadingOverlay, MantineProvider, Space, Title } from '@mantine/core';
+import { AppShell, Box, Container, Image, LoadingOverlay, MantineProvider, Space, Title } from '@mantine/core';
 import { LoginProvider } from './components/LoginProvider';
 import { getLoading, useLoading, useToken } from './utils';
 import { DEV_IP_BACKEND } from './utils/net';
@@ -67,7 +67,9 @@ export default function App() {
               alignItems: "center"
             }}>
               <Space w="md" />
-              <Title order={2} >
+              <Image src="/logo.png" alt="Splitify Logo" width={30} height={30} />
+              <Space w="xs" />
+              <Title order={2}>
                 Splitify 🛍️
               </Title>
               <Box style={{ flexGrow: 1 }} />

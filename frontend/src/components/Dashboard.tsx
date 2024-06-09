@@ -36,7 +36,7 @@ export const Dashboard = ({ setHeader }:{ setHeader:(p:any)=>void }) => {
                 message: boards.error.message,
                 color: "red"
             })
-    }, [boards])
+    }, [boards.isFetched])
 
     const form = useForm({
         initialValues: {
